@@ -10,6 +10,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Map;
 
 
 public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
@@ -124,13 +125,12 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
 
         String name = new String(Arrays.copyOfRange(message, 2, message.length));
         /// checks if this name is unique 
-        GlobalData.ids.forEach((key,value) -> {
-            if (name.equals(value))
-                    {
-                        conns.send(connectionId, error((short)0));// name is not unique
-                        return;
-                    }
-        });
+        for (Map.Entry<Integer, String> entry : GlobalData.ids.entrySet()) {
+            if (name.equals(entry.getValue())) {
+                conns.send(connectionId, error((short) 0)); // name is not unique
+                return; // Exit the loop early
+            }
+        }
         // sends back response
         connected = true;
         GlobalData.ids.put(connectionId, name);
