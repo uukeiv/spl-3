@@ -69,7 +69,6 @@ public class TftpEncoderDecoder implements MessageEncoderDecoder<byte[]> {
 
     private void classify(){
         short opcode = ( short ) ((( short ) mess [0]) << 8 | ( short ) ( mess [1]) );
-        System.err.println(" the opcode is " + opcode);
         switch (opcode) {
             case RRQ:
                 delimiter = '\0';

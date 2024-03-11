@@ -201,7 +201,7 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
             readBlock++;
 
             bytesRead = fis.read(data);
-            System.out.println("read this many bytes " + bytesRead);
+
             if (bytesRead == -1){
                 reading = false;
                 return;
