@@ -23,6 +23,7 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
     private String fileToWrite       = null;
     private String fileToRead        = null;
     private byte[] remainingFileName = null;
+    private byte fileData[];
     private final String path        = "Flies\\";
     private short opcode             = 0;
     private short lastBlock          = 0;
@@ -30,6 +31,7 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
     private int fileStopped          = 0;
     private short nameBlockNum       = 0;
     private int maxDataPack          = 512;
+    private int reader = 0;
     //
     static final short RRQ   = 0x01;
     static final short WRQ   = 0x02;
@@ -79,24 +81,29 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
     private void classify(short opcode, byte[] message){
         switch (opcode) {
             case RRQ:
-                readFile(message);
+                //readFile(message);
+                readfile(message);
                 break;
             
             case WRQ:
-                writeFileCheck(message);
+                //writeFileCheck(message);
+                writefileCheck(message);
                 break;
 
             // this case only catches the wrtie file data
             case DATA:
-                writeFile(message);
+                //writeFile(message);
+                writefile(message);
                 break;    
             
             // this gets called from reading and get dir so i need to add some sort of salution for this 
             case ACK:{
-                if (reading)
-                    continueReading();
-                else   
-                    continueFilesName();
+                // if (reading)
+                //     //continueReading();
+                //     conread(message);
+                // else   
+                //     continueFilesName();
+                conread(message);
                 break;
             }
             // case ERROR:
@@ -104,7 +111,8 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
             //     break;
 
             case DIRQ:
-                sendFileNames();
+                //sendFileNames();
+                getFileNames();
                 break;   
             
             case DELRQ:
@@ -119,7 +127,7 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
 
     private void login(byte[] message){
         if (connected){
-            conns.send(connectionId,error((short)6));// sends back error
+            conns.send(connectionId,error((short)7));// sends back error
             return;
         }
 
@@ -127,7 +135,7 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
         /// checks if this name is unique 
         for (Map.Entry<Integer, String> entry : GlobalData.ids.entrySet()) {
             if (name.equals(entry.getValue())) {
-                conns.send(connectionId, error((short) 0)); // name is not unique
+                conns.send(connectionId, error((short) 7)); // name is not unique
                 return; // Exit the loop early
             }
         }
@@ -287,6 +295,147 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
         }
     }
 
+    private void writefileCheck(byte[] msg){
+        reader = 0;
+        String fname = new String(Arrays.copyOfRange(msg, 2, msg.length));
+        // max number that can be get with a short * 512
+        fileData = new byte[16777344];
+        fileToWrite = path + fname;
+        File file = new File(fileToWrite);
+
+        // Checks if the file already exists
+        if (file.exists()){
+            conns.send(connectionId, error((short)5));
+            return;
+        }
+
+        conns.send(connectionId,sendAck((short)0));
+    }
+
+    private void writefile(byte[] message){
+
+        File file = new File(fileToWrite);
+        // checks again if someone created the file
+        if (file.exists()){
+            conns.send(connectionId, error((short)5));
+            return;
+        }
+        // checks if the right block was received 
+        byte[] blockNum = new byte[2];
+        blockNum[0] = message[4];
+        blockNum[1] = message[5];
+        short messageNum = arrToShort(blockNum);
+        if (reader != messageNum - 1){
+            conns.send(connectionId, error((short) 8));
+            return;
+        }
+
+        // gets the length of the data
+        byte[] dataSize = new byte[2];
+        dataSize[0] = message[2];
+        dataSize[1] = message[3];
+        short len = arrToShort(dataSize);
+
+        // extracts the actual data
+        byte[] toWrite = new byte[len]; 
+        System.arraycopy(message, 6, toWrite, 0, message.length - 6);
+        
+        // write into the right place the new data
+        System.arraycopy(toWrite, 0, fileData, reader*maxDataPack, len);
+        int size = len + reader*maxDataPack;
+
+        // sends back a ACK packet 
+        conns.send(connectionId,sendAck(messageNum));
+        reader++;
+
+        // technically this might bug out but there is no way of telling if the file transfer has finished if the files size
+        // happens to be exacly a multiplication of 512
+        if (len != maxDataPack){
+            // creates the file
+            try{
+                file.createNewFile();
+                //writes the file
+                try (FileOutputStream fos = new FileOutputStream(file)) {
+                    fos.write(fileData, 0, size);
+                    System.out.println("Successfully wrote portion of array to file.");
+                } catch (IOException e) {
+                    // need to check this 
+                    if (e.getMessage() == "No space left on device")
+                        conns.send(len, error((short) 3));
+                    return;
+                }
+            }catch(IOException err){}
+
+            //sends bcast
+            GlobalData.ids.forEach((id,value) -> {
+                if (value != "")
+                    conns.send(id, bCastPack(true, fileToWrite.substring(path.length())));// sends the file name without the path
+            });
+        }
+       
+    }
+
+    private void readfile(byte[] message){
+        reader = 0;
+        reading = true;
+        fileToWrite = path + new String(Arrays.copyOfRange(message, 2, message.length));
+        try {
+            File file = new File(fileToWrite);
+            FileInputStream fis = new FileInputStream(file);
+
+            // Get the length of the file
+            long fileSize = file.length();
+
+            // Create a byte array to store the file content
+            fileData = new byte[(int) fileSize];
+
+            // Read the file content into the byte array
+            fis.read(fileData);
+
+            // Close the FileInputStream
+            fis.close();
+
+            // Now you have the file content in the byte array
+            // You can process the fileData array as needed
+        }
+        catch(FileNotFoundException err){
+            // file doesnt exist
+            conns.send(connectionId, error((short) 1));
+            return;
+        }
+        
+        catch (IOException e) {
+            e.printStackTrace();
+        }
+        conread(new byte[]{0x00,0x00,0x00,0x00});
+    }
+
+    private void conread(byte[] msg){
+        long left = fileData.length - reader*maxDataPack;
+        byte[] packData;
+        //checks if right ack
+        short ack =  ( short ) ((( short ) msg [2]) << 8 | ( short ) ( msg [3] & 0xff) );
+        if(ack != reader)
+            reader = ack;
+
+        // there is less than maxDataPack bytes left to read
+        if(left < 0){
+            //reader++;
+            //conns.send(connectionId, dataPack(new byte[0], (short) reader));
+            reading = false;
+            return;
+        }
+
+        if(left < maxDataPack)
+            packData = Arrays.copyOfRange(fileData, reader*maxDataPack, fileData.length);
+        else
+            packData = Arrays.copyOfRange(fileData, reader*maxDataPack,reader*maxDataPack + maxDataPack);
+
+        reader++;
+        conns.send(connectionId, dataPack(packData, (short)reader));
+
+    }
+
     private void sendFileNames(){
         fileStopped = 0;
         nameBlockNum = 1;
@@ -349,6 +498,34 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
             conns.send(connectionId, dataPack(new byte[0], nameBlockNum));// just send one data packet with only the delimiter 
         
         nameBlockNum++;
+    }
+
+    private void getFileNames(){
+        reader = 0;
+        // creates a File object representing the directory
+        File directory = new File(path);
+
+        // gets all the file names in the directory
+        String[] files = directory.list();
+
+        // max number that can be get with a short * 512
+        fileData = new byte[16777344];
+        int indx = 0;
+        
+        // puts all the names in the array
+        for (String name : files){
+            for (byte b : name.getBytes()){
+                fileData[indx] = b;
+                indx++;
+            }
+            // adds delimiter
+            fileData[indx] = '\0';
+            indx++;
+        }
+        
+        // resizes the array
+        fileData = Arrays.copyOf(fileData, indx);
+        conread(new byte[]{0x00,0x00,0x00,0x00});
     }
 
     private void deleteFile(byte[] message){
