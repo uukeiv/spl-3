@@ -2,7 +2,6 @@ package bgu.spl.net.srv;
 
 import java.io.IOException;
 import java.util.concurrent.ConcurrentHashMap;
-import bgu.spl.net.srv.GlobalData;
 
 public class connect<T> implements Connections<T>{
     
@@ -26,11 +25,8 @@ public class connect<T> implements Connections<T>{
 
     public void disconnect(int connectionId){
         GlobalData.ids.remove(connectionId);
-        try{
+        try {
             handlers.remove(connectionId).close();
-        }
-        catch(IOException err){
-            
-        }
+        } catch (IOException e) {}
     }
 }
