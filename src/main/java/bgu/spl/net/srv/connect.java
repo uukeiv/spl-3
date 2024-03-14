@@ -11,7 +11,6 @@ public class connect<T> implements Connections<T>{
     public void connect(int connectionId, ConnectionHandler<T> handler){
         GlobalData.ids.put(connectionId,"");
         handlers.put(connectionId, handler);
-        handler.startProtocol(connectionId, this);
         Thread client = new Thread((Runnable) handler);
         client.start();
     }
@@ -27,6 +26,8 @@ public class connect<T> implements Connections<T>{
         GlobalData.ids.remove(connectionId);
         try {
             handlers.remove(connectionId).close();
+
         } catch (IOException e) {}
     }
+
 }

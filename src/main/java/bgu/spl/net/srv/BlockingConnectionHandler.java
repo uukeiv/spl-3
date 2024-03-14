@@ -6,7 +6,6 @@ import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.net.Socket;
-import java.util.Arrays;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
@@ -19,11 +18,15 @@ public class BlockingConnectionHandler<T> implements Runnable, ConnectionHandler
     private BufferedOutputStream out;
     private volatile boolean connected = true;
     private BlockingQueue<byte[]> pq;  
+    private Connections<T> conns;
+    private int connectionId;
 
-    public BlockingConnectionHandler(Socket sock, MessageEncoderDecoder<T> reader, BidiMessagingProtocol<T> protocol) {
+    public BlockingConnectionHandler(Socket sock, MessageEncoderDecoder<T> reader, BidiMessagingProtocol<T> protocol, Connections<T> conns, int connectionId) {
         this.sock = sock;
         this.encdec = reader;
         this.protocol = protocol;
+        this.conns = conns;
+        this.connectionId = connectionId;
         pq = new LinkedBlockingQueue<byte[]>();
     }
 
@@ -31,6 +34,7 @@ public class BlockingConnectionHandler<T> implements Runnable, ConnectionHandler
     public void run() {
         try (Socket sock = this.sock) { //just for automatic closing
             int read;
+            protocol.start(connectionId, conns);
 
             in = new BufferedInputStream(sock.getInputStream());
             out = new BufferedOutputStream(sock.getOutputStream());
@@ -47,9 +51,7 @@ public class BlockingConnectionHandler<T> implements Runnable, ConnectionHandler
                     sockSend();
             }
 
-        } catch (IOException ex) {
-            ex.printStackTrace();
-        }
+        } catch (IOException ex) {}
 
     }
 
@@ -63,14 +65,7 @@ public class BlockingConnectionHandler<T> implements Runnable, ConnectionHandler
         return this.sock;
     }
 
-    @Override
-    public void startProtocol(int id, Connections<T> conns)
-    {
-        protocol.start(id, conns);
-    }
-
     private void sockSend(){  
-        System.out.println("sending a message " + Arrays.toString(pq.peek()));
         try{
             out.write(pq.poll());
             out.flush();

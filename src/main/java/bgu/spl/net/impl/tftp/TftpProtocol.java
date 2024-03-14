@@ -47,7 +47,6 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
 
     @Override
     public void process(byte[] message) {
-        System.out.println("received " + Arrays.toString(message) + "which is the length of " + message.length);
         opcode = arrToShort(message);
         if (opcode == LOGRQ){
             login(message);
@@ -74,37 +73,25 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
     private void classify(short opcode, byte[] message){
         switch (opcode) {
             case RRQ:
-                //readFile(message);
                 readfile(message);
                 break;
             
             case WRQ:
-                //writeFileCheck(message);
                 writefileCheck(message);
                 break;
 
             // this case only catches the wrtie file data
             case DATA:
-                //writeFile(message);
                 writefile(message);
                 break;    
             
             // this gets called from reading and get dir so i need to add some sort of salution for this 
             case ACK:{
-                // if (reading)
-                //     //continueReading();
-                //     conread(message);
-                // else   
-                //     continueFilesName();
                 conread(message);
                 break;
             }
-            // case ERROR:
-                
-            //     break;
 
             case DIRQ:
-                //sendFileNames();
                 getFileNames();
                 break;   
             
@@ -373,6 +360,8 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
     private void disconnect(){
         if (connected)
             conns.send(connectionId, sendAck((short)0));
+        else
+            conns.send(connectionId, error((short)6));
         conns.disconnect(connectionId);
         terminate = true;
     }
