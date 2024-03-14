@@ -21,7 +21,7 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
     private boolean connected        = false;
     private String fileToWrite       = null;
     private byte fileData[];
-    private final String path        = "Flies\\";
+    private final String path        = "Files" + File.separator;
     private short opcode             = 0;
     private int maxDataPack          = 512;
     private int reader = 0;
